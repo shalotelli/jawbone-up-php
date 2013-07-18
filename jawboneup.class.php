@@ -76,7 +76,7 @@ class JawboneUp {
 	 * 
 	 * @var [type]
 	 */
-	private $_user = null;
+	private $_user = false;
 
 	/**
 	 * [$_token description]
@@ -117,12 +117,17 @@ class JawboneUp {
 		$this->_email = $email;
 		$this->_pass = $pass;
 
-		$auth = $this->_authenticate($email, $pass);
+		$auth = $this->_authenticate();
 
-		$this->_user = (array) $auth['user'];
-		$this->_token = $auth['token'];
-		$this->_uid = $auth['user']->uid;
-		$this->_xid = $auth['user']->xid;
+		$this->_user = $auth['user'];
+
+		if($this->_user) {
+			$this->_user = (array) $this->_user;
+
+			$this->_token = $auth['token'];
+			$this->_uid = $auth['user']->uid;
+			$this->_xid = $auth['user']->xid;
+		}
 
 		return $this;
 	}
@@ -146,7 +151,7 @@ class JawboneUp {
 	 */
 	public function user_details($attr='')
 	{
-		if( $this->_user == null || ! array_key_exists($attr,  $this->_user)) {
+		if(! $this->_user || ! array_key_exists($attr,  $this->_user)) {
 			return false;
 		}
 
@@ -706,11 +711,10 @@ class JawboneUp {
 		$args = 
 			array(
 				'after' => null, 
-				'limit' => 30, 
-				'_token' => $this->_token
+				'limit' => 30
 			);
 
-		return $this->_request('user/signin/login', $args);
+		return $this->_request('nudge/api/users/@me/social', $args);
 	}
 
 	/**
@@ -810,20 +814,18 @@ class JawboneUp {
 	 * token be passed. This token can be retrieved by performing a login 
 	 * request.
 	 * 
-	 * @param  [type] $email [description]
-	 * @param  [type] $pass  [description]
 	 * @return [type]        [description]
 	 */
-	private function _authenticate($email, $pass)
+	private function _authenticate()
 	{
 		$args = 
 			array(
-				'email' => $email, 
-				'pwd' => $pass, 
+				'email' => $this->_email, 
+				'pwd' => $this->_pass, 
 				'service' => 'nudge'
 			);
 
-		return $this->_request('user/signin/login', $args);
+		return $this->_request('user/signin/login', $args, false);
 	}
 
 	/**
@@ -836,8 +838,14 @@ class JawboneUp {
 	 * 
 	 * @return array|string|JawboneUp_Exception
 	 */
-	private function _request($method, $args=array(), $http='POST')
+	private function _request($method, $args=array(), $auth=true, $http='POST')
 	{
+		if($auth) {
+			// $auth = $this->_authenticate();
+			// $this->_token = $auth['token'];
+			$args['_token'] = $this->_token;
+		}
+
 		$url = $this->_end_point.$method;
 
 		switch($http) {
@@ -874,6 +882,7 @@ class JawboneUp {
 		if($response_code == 200) {
 			return $response_body;
 		} else {
+			print_r($response_body);exit;
 			$message = isset($body['error']->msg) ? $body['error']->msg : '';
 
 			throw new JawboneUp_Exception($message, $response_code);
@@ -915,12 +924,23 @@ class JawboneUp {
 				set_time_limit(2 * 60);
 			}
 
+			$headers = array(
+				'User-Agent' => "Nudge/2.5.6 CFNetwork/609.1.4 Darwin/13.0.0", 
+				'Accept' => 'application/json',
+        		'x-nudge-platform' => 'iPhone 5,2; 6.1.3',
+        		'Accept-Encoding' => 'plain'
+			);
+
+			if($this->_token!=='') {
+				$headers['x-nudge-token'] = $this->_token;
+			}
+
 			$ch = curl_init();
 
 			curl_setopt($ch, CURLOPT_URL, $url);
 			curl_setopt($ch, CURLOPT_POST, ($method=='POST'));
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $fields);
-			curl_setopt($ch, CURLOPT_HTTPHEADER, array('Expect:'));
+			curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 			curl_setopt($ch, CURLOPT_HEADER, false);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 			curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2 * 60 * 1000);
