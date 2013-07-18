@@ -703,7 +703,14 @@ class JawboneUp {
 	 */
 	public function feed_summary()
 	{
-		;
+		$args = 
+			array(
+				'after' => null, 
+				'limit' => 30, 
+				'_token' => $this->_token
+			);
+
+		return $this->_request('user/signin/login', $args);
 	}
 
 	/**
